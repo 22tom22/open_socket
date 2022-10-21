@@ -96,6 +96,7 @@ int OpenSocket(char *ifname)
     strcpy(ifr.ifr_name, ifname);
     memcpy(&ifr.ifr_hwaddr.sa_data, lldpaddr, ETH_ALEN);
 
+    /*
     unsigned char *buffer = (unsigned char *)malloc(65536); // to receive data
     memset(buffer, 0, 65536);
     struct sockaddr saddr;
@@ -136,9 +137,9 @@ int OpenSocket(char *ifname)
     // printf("\t|-Destination IP : %s\n", inet_ntoa(dest.sin_addr));
 
     struct iphdr *ip = (struct iphdr *)(buffer + sizeof(struct ethhdr));
-    /* getting actual size of IP header*/
+    // getting actual size of IP header
     iphdrlen = ip->ihl * 4;
-    /* getting pointer to udp header*/
+    // getting pointer to udp header
     struct udphdr *udp = (struct udphdr *)(buffer + iphdrlen + sizeof(struct ethhdr));
 
     printf("\t|-Source Port : %d\n", ntohs(udp->source));
@@ -157,6 +158,96 @@ int OpenSocket(char *ifname)
         printf(" %.2X ", data[ii]);
     }
     printf("\n-------------------------------------------------------------------------------\n\n");
+    */
+}
+
+int ReadSocket(int sock_r)
+{
+    int nn;
+    uint8_t packet[2048];
+    struct iovec iov = {.iov_base = packet, .iov_len = 2048};
+    struct cmsghdr *cmsg_ptr;
+
+    union
+    {
+        struct cmsghdr cmsg;
+        char buf[CMSG_SPACE(sizeof(struct tpacket_auxdata))];
+    } cmsg_buf;
+
+    struct msghdr msg = {.msg_iov = &iov, .msg_iovlen = 1, .msg_control = &cmsg_buf, .msg_controllen = sizeof(cmsg_buf)};
+
+    // open a raw socket binded to the tx interface
+    if ((sock_r = OpenSocket("enp0s3")) < 0)
+    {
+        printf("Error opening raw socket\n");
+        return -1;
+    }
+
+    while ((nn = recvmsg(sock_r, &msg, 0)) >= 0)
+    {
+        int buflen;
+
+        unsigned char *buffer = (unsigned char *)malloc(65536); // to receive data
+        memset(buffer, 0, 65536);
+        struct sockaddr saddr;
+        int saddr_len = sizeof(saddr);
+
+        buflen = recvfrom(sock_r, buffer, 65536, 0, &saddr, (socklen_t *)&saddr_len);
+        if (buflen < 0)
+        {
+            printf("error in reading recvfrom function\n");
+            return -1;
+        }
+
+        struct eth_hdr *eth = (struct eth_hdr *)(buffer);
+        printf("\nEthernet Header\n");
+        printf("\t|-Source Address : %.2X-%.2X-%.2X-%.2X-%.2X-%.2X\n", eth->src[0], eth->src[1], eth->src[2], eth->src[3], eth->src[4], eth->src[5]);
+        printf("\t|-Destination Address : %.2X-%.2X-%.2X-%.2X-%.2X-%.2X\n", eth->dst[0], eth->dst[1], eth->dst[2], eth->dst[3], eth->dst[4], eth->dst[5]);
+        printf("\t|-Protocol : %d\n", eth->eth_type);
+
+        unsigned short iphdrlen;
+        struct iphdr *ip_hdr = (struct iphdr *)(buffer + sizeof(struct eth_hdr));
+
+        // memset(&source, 0, sizeof(source));
+        // source.sin_addr.s_addr = ip_hdr->saddr;
+        // memset(&dest, 0, sizeof(dest));
+        // dest.sin_addr.s_addr = ip_hdr->daddr;
+
+        printf("\t|-Version : %d\n", (unsigned int)ip_hdr->version);
+        printf("\t|-Internet Header Length : %d DWORDS or %d Bytes\n", (unsigned int)ip_hdr->ihl, ((unsigned int)(ip_hdr->ihl)) * 4);
+        printf("\t|-Type Of Service : %d\n", (unsigned int)ip_hdr->tos);
+        printf("\t|-Total Length : %d Bytes\n", ntohs(ip_hdr->tot_len));
+        printf("\t|-Identification : %d\n", ntohs(ip_hdr->id));
+        printf("\t|-Time To Live : %d\n", (unsigned int)ip_hdr->ttl);
+        printf("\t|-Protocol : %d\n", (unsigned int)ip_hdr->protocol);
+        printf("\t|-Header Checksum : %d\n", ntohs(ip_hdr->check));
+
+        // printf("\t|-Source IP : %s\n", inet_ntoa(source.sin_addr));
+        // printf("\t|-Destination IP : %s\n", inet_ntoa(dest.sin_addr));
+
+        struct iphdr *ip = (struct iphdr *)(buffer + sizeof(struct ethhdr));
+        /* getting actual size of IP header*/
+        iphdrlen = ip->ihl * 4;
+        /* getting pointer to udp header*/
+        struct udphdr *udp = (struct udphdr *)(buffer + iphdrlen + sizeof(struct ethhdr));
+
+        printf("\t|-Source Port : %d\n", ntohs(udp->source));
+        printf("\t|-Destination Port : %d\n", ntohs(udp->dest));
+        // printf("\t|-UDP Length : %d\n", ntohs(udp->len));
+        printf("\t|-UDP Checksum : %d\n", ntohs(udp->check));
+
+        unsigned char *data = (buffer + iphdrlen + sizeof(struct ethhdr) + sizeof(struct udphdr));
+
+        int remaining_data = buflen - (iphdrlen + sizeof(struct ethhdr) + sizeof(struct udphdr));
+
+        for (int ii = 0; ii < remaining_data; ii++)
+        {
+            if (ii != 0 && ii % 16 == 0)
+                printf("\n");
+            printf(" %.2X ", data[ii]);
+        }
+        printf("\n-------------------------------------------------------------------------------\n\n");
+    }
 }
 
 /**
@@ -164,13 +255,11 @@ int OpenSocket(char *ifname)
  */
 int main(int argc, char **argv)
 {
-    int x;
+    int sock_r;
 
     GetIf("enp0s3");
-
-    for (x = 1;; x++)
-    {
-        OpenSocket("enp0s3");
-        sleep(1);
-    }
+    OpenSocket("enp0s3");
+    printf("passo a quello dopo\n");
+    ReadSocket(argv[1]);
+    printf("Ho finito\n");
 }
