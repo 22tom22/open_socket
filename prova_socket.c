@@ -96,11 +96,15 @@ int OpenSocket(char *ifname)
     strcpy(ifr.ifr_name, ifname);
     memcpy(&ifr.ifr_hwaddr.sa_data, lldpaddr, ETH_ALEN);
 
+    printf("Tutto ok!!!!!!\n");
+
     /*
     unsigned char *buffer = (unsigned char *)malloc(65536); // to receive data
     memset(buffer, 0, 65536);
     struct sockaddr saddr;
     int saddr_len = sizeof(saddr);
+
+    printf("sono qua\n");
 
     // Receive a network packet and copy in to buffer
     buflen = recvfrom(sock_r, buffer, 65536, 0, &saddr, (socklen_t *)&saddr_len);
@@ -176,15 +180,21 @@ int ReadSocket(int sock_r)
 
     struct msghdr msg = {.msg_iov = &iov, .msg_iovlen = 1, .msg_control = &cmsg_buf, .msg_controllen = sizeof(cmsg_buf)};
 
+    printf("Eccomi\n");
+
     // open a raw socket binded to the tx interface
     if ((sock_r = OpenSocket("enp0s3")) < 0)
     {
         printf("Error opening raw socket\n");
         return -1;
     }
+    
+    printf("Sono passato\n");
 
-    while ((nn = recvmsg(sock_r, &msg, 0)) >= 0)
+    //while ((nn = recvmsg(sock_r, &msg, 0)) >= 0)
     {
+        printf("sono dentro il ciclo\n");
+
         int buflen;
 
         unsigned char *buffer = (unsigned char *)malloc(65536); // to receive data
@@ -193,11 +203,16 @@ int ReadSocket(int sock_r)
         int saddr_len = sizeof(saddr);
 
         buflen = recvfrom(sock_r, buffer, 65536, 0, &saddr, (socklen_t *)&saddr_len);
+
+        printf("buflen: %d\n", buflen);
+
         if (buflen < 0)
         {
             printf("error in reading recvfrom function\n");
             return -1;
         }
+
+       printf("faccio un passo avanti\n");
 
         struct eth_hdr *eth = (struct eth_hdr *)(buffer);
         printf("\nEthernet Header\n");
@@ -259,7 +274,5 @@ int main(int argc, char **argv)
 
     GetIf("enp0s3");
     OpenSocket("enp0s3");
-    printf("passo a quello dopo\n");
-    ReadSocket(argv[1]);
-    printf("Ho finito\n");
+    ReadSocket(sock_r);
 }
