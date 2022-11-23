@@ -300,10 +300,8 @@ int ReadSocket(int sock_r)
         }
         */
 
-        printf("Eccomi\n");
         for (cmsg_ptr = CMSG_FIRSTHDR(&msg); cmsg_ptr; cmsg_ptr = CMSG_NXTHDR(&msg, cmsg_ptr))
         {
-            printf("Sono dentro il for\n");
             struct tpacket_auxdata *aux_ptr;
 
             if ((cmsg_ptr->cmsg_len < CMSG_LEN(sizeof(struct tpacket_auxdata))) || (cmsg_ptr->cmsg_level != SOL_PACKET) || (cmsg_ptr->cmsg_type != PACKET_AUXDATA))
@@ -311,23 +309,16 @@ int ReadSocket(int sock_r)
                 continue;
             }
 
-            printf("Sono riuscito a passare qua\n");
-
             aux_ptr = (struct tpacket_auxdata *)CMSG_DATA(cmsg_ptr);
 
-            printf("Vado avanti di un passo\n");
-
-            /*
+            
             if (!VLAN_VALID(aux_ptr, aux_ptr))
             {
                 printf("Sono dentro l'if della VLAN\n");
                 continue;
             }
-            */
 
-            printf("Vado avanti di un ulteriore passo\n");
-
-            if (aux_ptr->tp_vlan_tci == 0)
+            if (aux_ptr->tp_vlan_tci != 0)
             {
                 printf("TAG\n");
             }
@@ -335,7 +326,6 @@ int ReadSocket(int sock_r)
             {
                 printf("No TAG 0x%x\n", (aux_ptr->tp_vlan_tci) & 0x0fff);
             }
-            printf("Ho finito con il for\n");
         }
 
         printf("\n-------------------------------------------------------------------------------\n\n");
