@@ -149,8 +149,8 @@ int OpenSocket(char *ifname)
     // struct iphdr *ip_hdr;
     const char lldpaddr[] = LLDP_MULTICAST_ADDR;
 
-    //get kernel interface index
-    if((if_index = GetIf(ifname)) < 0)
+    // get kernel interface index
+    if ((if_index = GetIf(ifname)) < 0)
     {
         printf("Error getting %s interface index\n", ifname);
         return -1;
@@ -281,11 +281,16 @@ int CaptureInterface(char *ifname)
             */
 
             if (aux_ptr->tp_vlan_tci == 0)
-                printf("Senza TAG\n");
+            {
+                printf("Senza TAG 0x%x\n", htons(eth_hdr->eth_type));
+                printf("Total lenght: %d\n", (ip_hdr->tot_len));
+                printf("Protocol: %d\n", (ip_hdr->protocol));
+            }
             else
             {
                 printf("Con TAG 0x%x\n", (aux_ptr->tp_vlan_tci) & 0x0fff);
                 printf("Vlan tpid: 0x%x\n", htons(aux_ptr->tp_vlan_tpid));
+                printf("Vlan 0x%x\n", htons(eth_hdr->eth_type));
                 printf("Lenght: %d\n", aux_ptr->tp_len);
                 // printf("Val tp_mac: %d%02x\n", aux_ptr->tp_mac);
             }
