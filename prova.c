@@ -149,6 +149,13 @@ int OpenSocket(char *ifname)
     // struct iphdr *ip_hdr;
     const char lldpaddr[] = LLDP_MULTICAST_ADDR;
 
+    //get kernel interface index
+    if((if_index = GetIf(ifname)) < 0)
+    {
+        printf("Error getting %s interface index\n", ifname);
+        return -1;
+    }
+
     sock_r = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
     if (sock_r < 0)
     {
@@ -180,8 +187,9 @@ int OpenSocket(char *ifname)
     return sock_r;
 }
 
-int CaptureInterface(int sock_r)
+int CaptureInterface(char *ifname)
 {
+    int sock_r;
     uint8_t packet[2048];
     struct sockaddr_ll packet_info;
     int packet_info_size = sizeof(packet_info);
@@ -216,7 +224,7 @@ int CaptureInterface(int sock_r)
     ip_hdr = (struct iphdr *)(packet + sizeof(struct ethhdr));
 
     // open a raw socket binded to the tx interface
-    if ((sock_r = OpenSocket("enp0s3")) < 0)
+    if ((sock_r = OpenSocket(ifname)) < 0)
     {
         printf("Error opening raw socket\n");
         return -1;
@@ -277,17 +285,15 @@ int CaptureInterface(int sock_r)
             else
             {
                 printf("Con TAG 0x%x\n", (aux_ptr->tp_vlan_tci) & 0x0fff);
-                printf("Val tp: 0x%x\n", (aux_ptr->tp_vlan_tpid) & 0x0fff);
-                printf("Val tp_mac: %d%02x\n", aux_ptr->tp_mac);
+                printf("Vlan tpid: 0x%x\n", htons(aux_ptr->tp_vlan_tpid));
+                printf("Lenght: %d\n", aux_ptr->tp_len);
+                // printf("Val tp_mac: %d%02x\n", aux_ptr->tp_mac);
             }
 
-            printf("Contenuto del pacchetto: %p\n", iov.iov_base);
+            // printf("Contenuto del pacchetto: %p\n", iov.iov_base);
 
-            
             printf("----------------------------------------------------------\n\n");
         }
-
-        
     }
 }
 
@@ -296,9 +302,19 @@ int CaptureInterface(int sock_r)
  */
 int main(int argc, char **argv)
 {
+    /*
     int sock_r;
 
-    GetIf("enp0s3");
-    OpenSocket("enp0s3");
+    GetIf("enp2s0");
+    OpenSocket("enp2s0");
     CaptureInterface(sock_r);
+    */
+
+    if (argc > 1)
+    {
+        printf("Running TTDP test suite on port %s ...\n", argv[1]);
+        CaptureInterface(argv[1]);
+    }
+    else
+        printf("Syntax: %s <ifname>\n", argv[0]);
 }
