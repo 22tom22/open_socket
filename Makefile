@@ -5,7 +5,7 @@ CC = gcc
 INCLUDE = -I.
 CFLAGS +=  -g -O2 $(INCLUDE)
 
-OBJS = open_sock.o
+OBJS = prova.o
 EXE = ttdp-test
 
 all: $(EXE) 

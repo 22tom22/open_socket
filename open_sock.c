@@ -10,13 +10,12 @@
 
 struct ethhdr
 {
-    unsigned char  h_dest[ETH_ALEN];
+    unsigned char h_dest[ETH_ALEN];
     unsigned char h_source[ETH_ALEN];
     __be16 h_proto;
-}__attribute__((packet));
+} __attribute__((packet));
 
-int
-OpenRAWSocket(char *ifname)
+int OpenRAWSocket(char *ifname)
 {
     int sock_r;
 
