@@ -285,6 +285,7 @@ int CaptureInterface(char *ifname)
                 printf("Senza TAG 0x%x\n", htons(eth_hdr->eth_type));
                 printf("Total lenght: %d\n", (ip_hdr->tot_len));
                 printf("Protocol: %d\n", (ip_hdr->protocol));
+                printf("Lenght: %d\n", aux_ptr->tp_len);
             }
             else
             {
@@ -294,8 +295,6 @@ int CaptureInterface(char *ifname)
                 printf("Lenght: %d\n", aux_ptr->tp_len);
                 // printf("Val tp_mac: %d%02x\n", aux_ptr->tp_mac);
             }
-
-            // printf("Contenuto del pacchetto: %p\n", iov.iov_base);
 
             printf("----------------------------------------------------------\n\n");
         }
@@ -307,14 +306,6 @@ int CaptureInterface(char *ifname)
  */
 int main(int argc, char **argv)
 {
-    /*
-    int sock_r;
-
-    GetIf("enp2s0");
-    OpenSocket("enp2s0");
-    CaptureInterface(sock_r);
-    */
-
     if (argc > 1)
     {
         printf("Running TTDP test suite on port %s ...\n", argv[1]);
