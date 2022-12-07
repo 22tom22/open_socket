@@ -205,8 +205,6 @@ int GetTag(struct msghdr *msg)
         }
         else
         {
-            printf("Con TAG 0x%x\n", (aux_ptr->tp_vlan_tci) & 0x0fff);
-            printf("Vlan tpid: 0x%x\n", htons(aux_ptr->tp_vlan_tpid));
             return (aux_ptr->tp_vlan_tci) & 0x0fff;
         }
     }
@@ -223,6 +221,7 @@ int CaptureInterface(char *ifname)
     struct iphdr *ip_hdr;
     struct pkt_info p;
     int one = 1;
+    int TagVlan = GetTag(&msg);
 
     const struct sniff_ethernet *ethernet; /* header ETHERNET */
     const struct sniff_ip *ip;             /* header IP */
@@ -318,14 +317,15 @@ int CaptureInterface(char *ifname)
         }
         */
 
-        if (GetTag(&msg) < 0)
+        if (TagVlan < 0)
         {
             printf("Pacchetto non taggato\n");
             printf("Protocol: 0x%x\n\n\n", htons(eth_hdr->eth_type));
         }
-        else if (GetTag(&msg) >= 0)
+        else if (TagVlan >= 0)
         {
-            printf("Pacchetto con tag\n\n\n");
+            printf("Pacchetto con tag\n");
+            printf("Protocol: 0x%x\n\n\n", htons(eth_hdr->eth_type));
         }
     }
 }
