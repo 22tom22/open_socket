@@ -142,12 +142,11 @@ int GetIf(char *ifname)
 
 int OpenSocket(char *ifname)
 {
-    int sock_r, if_index, buflen;
-    uint8_t packet[2048];
+    int sock_r, if_index;
+    // uint8_t packet[2048];
     struct sockaddr_ll sa;
     struct ifreq ifr;
-    // struct iphdr *ip_hdr;
-    const char lldpaddr[] = LLDP_MULTICAST_ADDR;
+    // const char lldpaddr[] = LLDP_MULTICAST_ADDR;
 
     // get kernel interface index
     if ((if_index = GetIf(ifname)) < 0)
@@ -182,9 +181,38 @@ int OpenSocket(char *ifname)
     ioctl(sock_r, SIOCGIFFLAGS, &ifr);
     ifr.ifr_flags |= IFF_PROMISC;
     ioctl(sock_r, SIOCSIFFLAGS, &ifr);
-    memcpy(&ifr.ifr_hwaddr.sa_data, lldpaddr, ETH_ALEN);
+    // memcpy(&ifr.ifr_hwaddr.sa_data, lldpaddr, ETH_ALEN);
 
     return sock_r;
+}
+
+int GetTag(struct msghdr *msg)
+{
+    uint8_t packet[2048];
+
+    struct iovec iov;
+    struct cmsghdr *cmsg_ptr;
+    union
+    {
+        struct cmsghdr cmsg;
+        char buf[CMSG_SPACE(sizeof(struct tpacket_auxdata))];
+    } cmsg_buf;
+
+    struct msghdr msg = {.msg_iov = &iov, .msg_iovlen = 1, .msg_control = &cmsg_buf, .msg_controllen = sizeof(cmsg_buf)};
+
+    iov.iov_base = packet;
+    iov.iov_len = 2048;
+    // msg.msg_iov = &iov;
+
+    for (cmsg_ptr = CMSG_FIRSTHDR(&msg); cmsg_ptr; cmsg_ptr = CMSG_NXTHDR(&msg, cmsg_ptr))
+    {
+        struct tpacket_auxdata *aux_ptr;
+
+        if ((cmsg_ptr->cmsg_len < CMSG_LEN(sizeof(struct tpacket_auxdata))) || (cmsg_ptr->cmsg_level != SOL_PACKET) || (cmsg_ptr->cmsg_type != PACKET_AUXDATA))
+            continue;
+
+        aux_ptr = (struct tpacket_auxdata *)CMSG_DATA(cmsg_ptr);
+    }
 }
 
 int CaptureInterface(char *ifname)
@@ -204,7 +232,7 @@ int CaptureInterface(char *ifname)
     const struct sniff_tcp *tcp;           /* header TCP */
     u_char *pt_ether;                      /* puntatore per stampare le informazioni contenute nell'header ETHERNET (hardware) */
 
-    struct iovec iov = {.iov_base = packet, .iov_len = 2048};
+    struct iovec iov;
     struct cmsghdr *cmsg_ptr;
     union
     {
@@ -245,10 +273,10 @@ int CaptureInterface(char *ifname)
     {
         printf("Pacchetto ricevuto\n");
 
-        ethernet = (struct sniff_ethernet *)(packet);
+        // ethernet = (struct sniff_ethernet *)(packet);
 
         /* catturo il MAC sorgente e di destinazione dall'header ETHERNET */
-        pt_ether = ethernet->ether_shost;
+        pt_ether = eth_hdr->src;
         i = ETHER_ADDR_LEN;
         printf("    Src MAC:");
         do
@@ -257,7 +285,7 @@ int CaptureInterface(char *ifname)
         } while (--i > 0);
         printf("\n");
 
-        pt_ether = ethernet->ether_dhost;
+        pt_ether = eth_hdr->dst;
         i = ETHER_ADDR_LEN;
         printf("    Dst MAC:");
         do
@@ -266,6 +294,7 @@ int CaptureInterface(char *ifname)
         } while (--i > 0);
         printf("\n");
 
+        /*
         for (cmsg_ptr = CMSG_FIRSTHDR(&msg); cmsg_ptr; cmsg_ptr = CMSG_NXTHDR(&msg, cmsg_ptr))
         {
             struct tpacket_auxdata *aux_ptr;
@@ -275,17 +304,9 @@ int CaptureInterface(char *ifname)
 
             aux_ptr = (struct tpacket_auxdata *)CMSG_DATA(cmsg_ptr);
 
-            /*
-            if (!VLAN_VALID(aux_ptr, aux_ptr))
-                continue;
-            */
-
             if (aux_ptr->tp_vlan_tci == 0)
             {
                 printf("Senza TAG 0x%x\n", htons(eth_hdr->eth_type));
-                printf("Total lenght: %d\n", (ip_hdr->tot_len));
-                printf("Protocol: %d\n", (ip_hdr->protocol));
-                printf("Lenght: %d\n", aux_ptr->tp_len);
             }
             else
             {
@@ -293,10 +314,21 @@ int CaptureInterface(char *ifname)
                 printf("Vlan tpid: 0x%x\n", htons(aux_ptr->tp_vlan_tpid));
                 printf("Vlan 0x%x\n", htons(eth_hdr->eth_type));
                 printf("Lenght: %d\n", aux_ptr->tp_len);
-                // printf("Val tp_mac: %d%02x\n", aux_ptr->tp_mac);
             }
+            */
 
             printf("----------------------------------------------------------\n\n");
+        }
+
+        int GetTag(&msg);
+
+        if (GetTag < 0)
+        {
+            printf("Pacchetto non taggat0\n");
+        }
+        else if (GetTag >= 0)
+        {
+            printf("Pacchetto con tag\n");
         }
     }
 }
