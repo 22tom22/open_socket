@@ -188,23 +188,9 @@ int OpenSocket(char *ifname)
 
 int GetTag(struct msghdr *msg)
 {
-    uint8_t packet[2048];
-
-    struct iovec iov;
     struct cmsghdr *cmsg_ptr;
-    union
-    {
-        struct cmsghdr cmsg;
-        char buf[CMSG_SPACE(sizeof(struct tpacket_auxdata))];
-    } cmsg_buf;
 
-    struct msghdr msg = {.msg_iov = &iov, .msg_iovlen = 1, .msg_control = &cmsg_buf, .msg_controllen = sizeof(cmsg_buf)};
-
-    iov.iov_base = packet;
-    iov.iov_len = 2048;
-    // msg.msg_iov = &iov;
-
-    for (cmsg_ptr = CMSG_FIRSTHDR(&msg); cmsg_ptr; cmsg_ptr = CMSG_NXTHDR(&msg, cmsg_ptr))
+    for (cmsg_ptr = CMSG_FIRSTHDR(msg); cmsg_ptr; cmsg_ptr = CMSG_NXTHDR(msg, cmsg_ptr))
     {
         struct tpacket_auxdata *aux_ptr;
 
@@ -212,6 +198,17 @@ int GetTag(struct msghdr *msg)
             continue;
 
         aux_ptr = (struct tpacket_auxdata *)CMSG_DATA(cmsg_ptr);
+
+        if (aux_ptr->tp_vlan_tci == 0)
+        {
+            return -1;
+        }
+        else
+        {
+            printf("Con TAG 0x%x\n", (aux_ptr->tp_vlan_tci) & 0x0fff);
+            printf("Vlan tpid: 0x%x\n", htons(aux_ptr->tp_vlan_tpid));
+            return (aux_ptr->tp_vlan_tci) & 0x0fff;
+        }
     }
 }
 
@@ -315,20 +312,20 @@ int CaptureInterface(char *ifname)
                 printf("Vlan 0x%x\n", htons(eth_hdr->eth_type));
                 printf("Lenght: %d\n", aux_ptr->tp_len);
             }
-            */
+
 
             printf("----------------------------------------------------------\n\n");
         }
+        */
 
-        int GetTag(&msg);
-
-        if (GetTag < 0)
+        if (GetTag(&msg) < 0)
         {
-            printf("Pacchetto non taggat0\n");
+            printf("Pacchetto non taggato\n");
+            printf("Protocol: 0x%x\n\n\n", htons(eth_hdr->eth_type));
         }
-        else if (GetTag >= 0)
+        else if (GetTag(&msg) >= 0)
         {
-            printf("Pacchetto con tag\n");
+            printf("Pacchetto con tag\n\n\n");
         }
     }
 }
