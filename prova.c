@@ -221,7 +221,7 @@ int CaptureInterface(char *ifname)
     struct iphdr *ip_hdr;
     struct pkt_info p;
     int one = 1;
-    int TagVlan = GetTag(&msg);
+    int TagVlan;
 
     const struct sniff_ethernet *ethernet; /* header ETHERNET */
     const struct sniff_ip *ip;             /* header IP */
@@ -317,10 +317,12 @@ int CaptureInterface(char *ifname)
         }
         */
 
+        TagVlan = GetTag(&msg);
+
         if (TagVlan < 0)
         {
             printf("Pacchetto non taggato\n");
-            printf("Protocol: 0x%x\n\n\n", htons(eth_hdr->eth_type));
+            printf("Protocol: 0x0%x\n\n\n", htons(eth_hdr->eth_type));
         }
         else if (TagVlan >= 0)
         {
