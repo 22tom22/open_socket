@@ -322,13 +322,15 @@ int CaptureInterface(char *ifname)
         if (TagVlan < 0)
         {
             printf("Pacchetto non taggato\n");
-            printf("Protocol: 0x0%x\n\n\n", htons(eth_hdr->eth_type));
+            printf("Protocol: 0x0%x\n", htons(eth_hdr->eth_type));
         }
         else if (TagVlan >= 0)
         {
             printf("Pacchetto con tag\n");
-            printf("Protocol: 0x%x\n\n\n", htons(eth_hdr->eth_type));
+            printf("Protocol: 0x%x\n", htons(eth_hdr->eth_type));
         }
+
+        printf("----------------------------------------------------------\n\n");
     }
 }
 
