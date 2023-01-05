@@ -52,25 +52,6 @@ struct eth_8021Q_hdr
     uint16_t encapsulated_proto;
 } __attribute__((packed));
 
-// Header Ethernet
-struct sniff_ethernet
-{
-    unsigned char ether_dhost[ETHER_ADDR_LEN]; // destination host address
-    unsigned char ether_shost[ETHER_ADDR_LEN]; // host address
-    unsigned short ether_type;
-};
-
-// decoded packet information
-struct igmp_proto_info
-{
-    uint8_t igmp_version;
-    uint8_t type;
-    char type_name[30];
-
-    struct in_addr mc_group; // multicast group address (bin)
-    char mc_group_str[18];   // multicast group address (str)
-};
-
 struct pkt_info
 {
     // l2 header info
@@ -88,8 +69,6 @@ struct pkt_info
     char dst_str[18];
     uint8_t l4_protocol;
     uint8_t l4_protocol_name[20];
-
-    struct igmp_proto_info igmp_proto_info;
 };
 
 struct lldp_info
@@ -113,6 +92,7 @@ struct lldp_info
     int *mgmt_addr;
 };
 
+/* Funzione che seleziona l-interfaccia da cui catturare i pacchetti */
 int GetIf(char *ifname)
 {
     int sock_r;
@@ -140,6 +120,7 @@ int GetIf(char *ifname)
     return ifr.ifr_ifindex;
 }
 
+/* Funizone per apertura e bind di un socket */
 int OpenSocket(char *ifname)
 {
     int sock_r, if_index;
@@ -186,6 +167,13 @@ int OpenSocket(char *ifname)
     return sock_r;
 }
 
+/* Funzione che stampa l'indirizzo Mac di sorgente e destinazione */
+void PrintMac(uint8_t *addr)
+{
+    printf("%02x:%02x:%02x:%02x:%02x:%02x", addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]);
+}
+
+/* Funzione che vede se il pacchetto catturato presenta il tag o meno*/
 int GetTag(struct msghdr *msg)
 {
     struct cmsghdr *cmsg_ptr;
@@ -210,6 +198,7 @@ int GetTag(struct msghdr *msg)
     }
 }
 
+/* Funzione principale */
 int CaptureInterface(char *ifname)
 {
     int sock_r;
@@ -268,54 +257,15 @@ int CaptureInterface(char *ifname)
     while ((nn = recvmsg(sock_r, &msg, 0)) >= 0)
     {
         printf("Pacchetto ricevuto\n");
-
-        // ethernet = (struct sniff_ethernet *)(packet);
-
+    
         /* catturo il MAC sorgente e di destinazione dall'header ETHERNET */
-        pt_ether = eth_hdr->src;
-        i = ETHER_ADDR_LEN;
-        printf("    Src MAC:");
-        do
-        {
-            printf("%s%02x", (i == ETHER_ADDR_LEN) ? " " : ":", *pt_ether++);
-        } while (--i > 0);
+        printf("    Src MAC: ");
+        PrintMac(eth_hdr->src);
         printf("\n");
 
-        pt_ether = eth_hdr->dst;
-        i = ETHER_ADDR_LEN;
-        printf("    Dst MAC:");
-        do
-        {
-            printf("%s%02x", (i == ETHER_ADDR_LEN) ? " " : ":", *pt_ether++);
-        } while (--i > 0);
+        printf("    Dst MAC: ");
+        PrintMac(eth_hdr->dst);     
         printf("\n");
-
-        /*
-        for (cmsg_ptr = CMSG_FIRSTHDR(&msg); cmsg_ptr; cmsg_ptr = CMSG_NXTHDR(&msg, cmsg_ptr))
-        {
-            struct tpacket_auxdata *aux_ptr;
-
-            if ((cmsg_ptr->cmsg_len < CMSG_LEN(sizeof(struct tpacket_auxdata))) || (cmsg_ptr->cmsg_level != SOL_PACKET) || (cmsg_ptr->cmsg_type != PACKET_AUXDATA))
-                continue;
-
-            aux_ptr = (struct tpacket_auxdata *)CMSG_DATA(cmsg_ptr);
-
-            if (aux_ptr->tp_vlan_tci == 0)
-            {
-                printf("Senza TAG 0x%x\n", htons(eth_hdr->eth_type));
-            }
-            else
-            {
-                printf("Con TAG 0x%x\n", (aux_ptr->tp_vlan_tci) & 0x0fff);
-                printf("Vlan tpid: 0x%x\n", htons(aux_ptr->tp_vlan_tpid));
-                printf("Vlan 0x%x\n", htons(eth_hdr->eth_type));
-                printf("Lenght: %d\n", aux_ptr->tp_len);
-            }
-
-
-            printf("----------------------------------------------------------\n\n");
-        }
-        */
 
         TagVlan = GetTag(&msg);
 
@@ -326,7 +276,7 @@ int CaptureInterface(char *ifname)
         }
         else if (TagVlan >= 0)
         {
-            printf("Pacchetto con tag\n");
+            printf("Pacchetto con tag: 0x%x\n", TagVlan);
             printf("Protocol: 0x%x\n", htons(eth_hdr->eth_type));
         }
 
