@@ -167,13 +167,13 @@ int OpenSocket(char *ifname)
     return sock_r;
 }
 
-/* Funzione che stampa l'indirizzo Mac di sorgente e destinazione */
+/* Funzione che stampa un indirizzo MAC */
 void PrintMac(uint8_t *addr)
 {
     printf("%02x:%02x:%02x:%02x:%02x:%02x", addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]);
 }
 
-/* Funzione che vede se il pacchetto catturato presenta il tag o meno*/
+/* Funzione che ritorna il valore del tag se il pacchetto contiene il tag vlan oppure -1 se il pacchetto nopn contiene il tag vlan*/
 int GetTag(struct msghdr *msg)
 {
     struct cmsghdr *cmsg_ptr;
@@ -212,11 +212,6 @@ int CaptureInterface(char *ifname)
     int one = 1;
     int TagVlan;
 
-    const struct sniff_ethernet *ethernet; /* header ETHERNET */
-    const struct sniff_ip *ip;             /* header IP */
-    const struct sniff_tcp *tcp;           /* header TCP */
-    u_char *pt_ether;                      /* puntatore per stampare le informazioni contenute nell'header ETHERNET (hardware) */
-
     struct iovec iov;
     struct cmsghdr *cmsg_ptr;
     union
@@ -226,10 +221,6 @@ int CaptureInterface(char *ifname)
     } cmsg_buf;
 
     struct msghdr msg = {.msg_iov = &iov, .msg_iovlen = 1, .msg_control = &cmsg_buf, .msg_controllen = sizeof(cmsg_buf)};
-
-    uint16_t protocol;
-    uint16_t vid = 0x0000;
-    unsigned char is_tagged = 0;
 
     bzero(&p, sizeof(p));
 
