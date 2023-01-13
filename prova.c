@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include <assert.h>
 
 #include <linux/if_packet.h>
 #include <linux/if_ether.h>
@@ -27,9 +28,33 @@
 #include <linux/if_vlan.h>
 #include <netinet/if_ether.h>
 
+#define TRUE = 0
+#define FALSE = 1
+
 #ifdef TP_STATUS_VLAN_VALID
 #define VLAN_VALID(hdr, hv) ((hv)->tp_vlan_tci != 0 || ((hdr)->tp_status & TP_STATUS_VLAN_VALID))
 #endif
+
+/* TLV Types*/
+#define END_OF_LLDPDU_TLV 0
+#define CHASSIS_ID_TLV 1
+#define PORT_ID_TLV 2
+#define PORT_DESCRIPTION_TLV 4
+#define SYSTEM_NAME_TLV 5
+
+/* Chassis ID TLV Subtypes*/
+#define CHASSIS_ID_CHASSIS_COMPONENT 1
+#define CHASSIS_ID_INTERFACE_ALIAS 2
+#define CHASSIS_ID_PORT_COMPONENT 3
+#define CHASSIS_ID_MAC_ADDRESS 4
+#define CHASSIS_ID_NETWORK_ADDRESS 5
+
+// Low level packet habndling
+#ifndef ETHERTYPE_LLDP
+#define ETHERTYPE_LLDP 0x88cc
+#endif
+#define ETHERTYPE_TTCMP 0x895
+#define ETHERTYPE_8021Q 0x8100
 
 #define LLDP_MULTICAST_ADDR                \
     {                                      \
@@ -71,6 +96,13 @@ struct pkt_info
     uint8_t l4_protocol_name[20];
 };
 
+struct lldp_tlv
+{
+    uint8_t type;
+    uint16_t length;
+    uint8_t *info;
+};
+
 struct lldp_info
 {
     int chassis_id_length;
@@ -90,6 +122,11 @@ struct lldp_info
     int mgmt_addr_type;
     int mgmt_addr_length;
     int *mgmt_addr;
+};
+
+struct ttdp_info
+{
+
 };
 
 /* Funzione che seleziona l-interfaccia da cui catturare i pacchetti */
@@ -162,7 +199,6 @@ int OpenSocket(char *ifname)
     ioctl(sock_r, SIOCGIFFLAGS, &ifr);
     ifr.ifr_flags |= IFF_PROMISC;
     ioctl(sock_r, SIOCSIFFLAGS, &ifr);
-    // memcpy(&ifr.ifr_hwaddr.sa_data, lldpaddr, ETH_ALEN);
 
     return sock_r;
 }
@@ -247,15 +283,13 @@ int CaptureInterface(char *ifname)
 
     while ((nn = recvmsg(sock_r, &msg, 0)) >= 0)
     {
-        printf("Pacchetto ricevuto\n");
-    
         /* catturo il MAC sorgente e di destinazione dall'header ETHERNET */
         printf("    Src MAC: ");
         PrintMac(eth_hdr->src);
         printf("\n");
 
         printf("    Dst MAC: ");
-        PrintMac(eth_hdr->dst);     
+        PrintMac(eth_hdr->dst);
         printf("\n");
 
         TagVlan = GetTag(&msg);
@@ -263,15 +297,152 @@ int CaptureInterface(char *ifname)
         if (TagVlan < 0)
         {
             printf("Pacchetto non taggato\n");
-            printf("Protocol: 0x0%x\n", htons(eth_hdr->eth_type));
+            // printf("Protocol: 0x0%x\n", htons(eth_hdr->eth_type));
         }
         else if (TagVlan >= 0)
         {
             printf("Pacchetto con tag: 0x%x\n", TagVlan);
-            printf("Protocol: 0x%x\n", htons(eth_hdr->eth_type));
+            // printf("Protocol: 0x%x\n", htons(eth_hdr->eth_type));
         }
 
         printf("----------------------------------------------------------\n\n");
+    }
+}
+
+/**
+ * Fills generic TLV structure (strcut lldp_tlv) with the supplied data
+ * decoding the type and length fields
+ *
+ * @param *data Pointer to the data buffer (recived data)
+ * @param *size Pointer to the buffer size; updated subtracing the consumed data length
+ * @param **tlv Pointer where to return the allocated TLV structure; the pointed value
+ *              must be NULL. It's suggested to free the returned data using FreeLLDPtlv()
+ * @return The consumed size (0 in case of error)
+ */
+uint DecodeTLV(uint8_t const *data, uint *size, struct lldp_tlv **tlv)
+{
+    uint decoded_bytes = 0;
+
+    assert(size);
+    assert(tlv && !*tlv);
+
+    if (data && *size)
+    {
+        // Decode the tLV header
+        uint16_t type, length;
+        uint16_t tlv_header;
+
+        memcpy(&tlv_header, data, sizeof(tlv_header));
+        type = ntohs(tlv_header) >> 9;
+        length = ntohs(tlv_header) & 0x01FF;
+
+        if (*size >= length + 2)
+        {
+            // Allocate the decoded TLV
+            *tlv = calloc(tlv_header, length); // >> 9;
+            (*tlv)->type = type;
+            (*tlv)->type = length;
+
+            // attach a copy of the payload
+            if (length)
+            {
+                (*tlv)->info = memcpy(data + 2, data +1, length);
+            }
+
+            // Update data size with consumed length
+            decoded_bytes = length + 2;
+            *size -= decoded_bytes;
+        }
+        else
+        {
+            printf("Malformed TLV(type %u): length is 2 + %u but available size is %u\n", type, length, *size);
+        }
+    }
+
+    return decoded_bytes;
+}
+
+/**
+ * @brief handle the recepition of a TTDP HELLO packet
+ *
+ * This is a standard LLDP packet containing a specific TLV
+ *
+ * @param tinfo A refernce to the global TTDP information structure
+ * @param packet Points to the recived packet
+ * @param size Is the size of the recived packet
+ * @return FALSE in case of any decoding error; TRUE otherwise
+ */
+static unsigned char HELLO_decodePacket(struct ttdp_info *tinfo, uint8_t const *packet, int32_t size)
+{
+    static char const lldpaddr[] = LLDP_MULTICAST_ADDR;
+
+    uint8_t const *p_packet = packet;
+    struct eth_hdr *hdr;
+    unsigned char tlv_end = 1;
+    unsigned char bad_frame = 1;
+
+    struct lldp_tlv *tlv = NULL;
+    uint tlv_num = 0;
+    uint8_t mandatory_tlv_mask = 0x00;
+
+    hdr = (struct eth_hdr *)packet;
+
+    while ((size > 0) && !tlv_end)
+    {
+        p_packet += DecodeTLV(p_packet, (uint *)&size, &tlv);
+        if (tlv)
+        {
+            tlv_num++;
+
+            if ((tlv_num < 4) && (tlv_num != tlv->type))
+            {
+                bad_frame = 0;
+            }
+            else if ((tlv_num > 3) && ((tlv->type == 1) || (tlv->type == 2) || (tlv->type == 3)))
+            {
+                bad_frame = 0;
+            }
+
+            if (tlv->type < 4)
+            {
+                mandatory_tlv_mask |= (0x1 << tlv->type);
+            }
+
+            /*
+            if (!HELLO_decodeTLV(tlv))
+            {
+                bad_frame = 0;
+            }
+            else if (tlv->type == END_OF_LLDPDU_TLV)
+            {
+                tlv_end = 0;
+            }
+            */
+
+            if (bad_frame)
+            {
+                printf("Malformed TTDP HELLO packet\n");
+            }
+
+            if (!bad_frame)
+            {
+                if (!tlv_end)
+                {
+                    printf("Malformed TTDP HELLO (missing END TLV)\n");
+                    bad_frame = 0;
+                }
+                else if (mandatory_tlv_mask != 0x0f)
+                {
+                    printf("Missing mandatory TTDP HELLO TLV / Packet Discarded\n");
+                }
+                else if (size > 0)
+                {
+                    printf("Extra bytes after END TLV in TTDP HELLO packet\n");
+                }
+            }
+
+            return !bad_frame;
+        }
     }
 }
 
