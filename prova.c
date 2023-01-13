@@ -419,6 +419,11 @@ static unsigned char HELLO_decodePacket(struct ttdp_info *tinfo, uint8_t const *
             }
             */
 
+           if(tlv->type == END_OF_LLDPDU_TLV)
+           {
+            tlv_end = 0;
+           }
+
             if (bad_frame)
             {
                 printf("Malformed TTDP HELLO packet\n");
