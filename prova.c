@@ -124,11 +124,6 @@ struct lldp_info
     int *mgmt_addr;
 };
 
-struct ttdp_info
-{
-
-};
-
 /* Funzione che seleziona l-interfaccia da cui catturare i pacchetti */
 int GetIf(char *ifname)
 {
@@ -297,15 +292,18 @@ int CaptureInterface(char *ifname)
         if (TagVlan < 0)
         {
             printf("Pacchetto non taggato\n");
+            printf("Dimensione del pacchetto: %ld\n", sizeof(packet_info_size));
+            printf("Dimensione del pacchetto: %ld\n", sizeof(packet));
             // printf("Protocol: 0x0%x\n", htons(eth_hdr->eth_type));
         }
         else if (TagVlan >= 0)
         {
             printf("Pacchetto con tag: 0x%x\n", TagVlan);
+            printf("Dimensione del pacchetto: %ld\n", sizeof(packet_info_size));
+            printf("Dimensione del pacchetto: %ld\n", sizeof(packet));
             // printf("Protocol: 0x%x\n", htons(eth_hdr->eth_type));
 
-            HELLO_decodePacket(..., packet, 2048);
-            DecodeTLV(..., 2048, ...);
+            HELLO_decodePacket(NULL, packet, 2048);
         }
 
         printf("----------------------------------------------------------\n\n");
@@ -349,7 +347,8 @@ uint DecodeTLV(uint8_t const *data, uint *size, struct lldp_tlv **tlv)
             // attach a copy of the payload
             if (length)
             {
-                (*tlv)->info = memcpy(data + 2, data +1, length);
+                (*tlv)->info = calloc(length, sizeof(char));
+                memcpy((*tlv)->info, data + 2, length);
             }
 
             // Update data size with consumed length
@@ -410,6 +409,9 @@ static unsigned char HELLO_decodePacket(struct ttdp_info *tinfo, uint8_t const *
             {
                 mandatory_tlv_mask |= (0x1 << tlv->type);
             }
+
+            printf("Information contains in tlv->type: %d\n", tlv->type);
+            printf("Information contains in tlv->length: %d\n", tlv->length);
 
             /*
             if (!HELLO_decodeTLV(tlv))
