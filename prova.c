@@ -303,6 +303,9 @@ int CaptureInterface(char *ifname)
         {
             printf("Pacchetto con tag: 0x%x\n", TagVlan);
             // printf("Protocol: 0x%x\n", htons(eth_hdr->eth_type));
+
+            HELLO_decodePacket(..., packet, 2048);
+            DecodeTLV(..., 2048, ...);
         }
 
         printf("----------------------------------------------------------\n\n");
