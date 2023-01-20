@@ -260,6 +260,7 @@ uint DecodeTLV(uint8_t const *data, uint *size, struct lldp_tlv **tlv)
 
         memcpy(&tlv_header, data, sizeof(tlv_header));
         type = ntohs(tlv_header) >> 9;
+        printf("            type: %d\n", type);
         length = ntohs(tlv_header) & 0x01FF;
 
         if (*size >= length + 2)
@@ -314,6 +315,8 @@ static unsigned char HELLO_decodePacket(struct ttdp_info *tinfo, uint8_t const *
 
     hdr = (struct eth_hdr *)packet;
 
+    printf("Valore iniziale di tlv_end: %d\n", tlv_end);
+
     while ((size > 0) /*&& !tlv_end*/)
     {
         printf("Sono qua dentro\n");
@@ -322,6 +325,8 @@ static unsigned char HELLO_decodePacket(struct ttdp_info *tinfo, uint8_t const *
         if (tlv)
         {
             tlv_num++;
+
+            printf("Valore di tlv_num: %d\n", tlv_num);
 
             if ((tlv_num < 4) && (tlv_num != tlv->type))
             {
@@ -360,6 +365,8 @@ static unsigned char HELLO_decodePacket(struct ttdp_info *tinfo, uint8_t const *
             {
                 printf("Malformed TTDP HELLO packet\n");
             }
+
+            printf("Valore di tlv_end: %d\n", tlv_end);
 
             if (!bad_frame)
             {
@@ -446,16 +453,14 @@ int CaptureInterface(char *ifname)
         if (TagVlan < 0)
         {
             printf("Pacchetto non taggato\n");
-            printf("Dimensione del pacchetto: %d\n", nn);
             // printf("Protocol: 0x0%x\n", htons(eth_hdr->eth_type));
         }
         else if (TagVlan >= 0)
         {
             printf("Pacchetto con tag: 0x%x\n", TagVlan);
-            printf("Dimensione del pacchetto: %d\n", nn);
             // printf("Protocol: 0x%x\n", htons(eth_hdr->eth_type));
 
-            HELLO_decodePacket(NULL, packet, 180);
+            HELLO_decodePacket(NULL, packet, 386);
         }
 
         printf("----------------------------------------------------------\n\n");
