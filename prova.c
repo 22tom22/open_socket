@@ -315,9 +315,11 @@ static unsigned char HELLO_decodePacket(struct ttdp_info *tinfo, uint8_t const *
 
     hdr = (struct eth_hdr *)packet;
 
+    printf("%2x %2x %2x %2x %2x %2x %2x %2x %2x %2x\n", *packet, *(packet+1), *(packet+2), *(packet+3), *(packet+4), *(packet+5), *(packet+6), *(packet+7), *(packet+8), *(packet+9), *(packet+10));
+
     // printf("Valore iniziale di tlv_end: %d\n", tlv_end);
 
-    while ((size > 0) /*&& !tlv_end*/)
+    while ((size > 0) && !tlv_end)
     {
         // printf("Sono qua dentro\n");
 
@@ -325,6 +327,7 @@ static unsigned char HELLO_decodePacket(struct ttdp_info *tinfo, uint8_t const *
         if (tlv)
         {
             tlv_num++;
+            printf("val di tlv_num %d\n", tlv_num);
 
             // printf("Valore di tlv_num: %d\n", tlv_num);
 
@@ -368,6 +371,8 @@ static unsigned char HELLO_decodePacket(struct ttdp_info *tinfo, uint8_t const *
 
             // printf("Valore di tlv_end: %d\n", tlv_end);
 
+            printf("Grandezza di size %d\n", size);
+
             if (!bad_frame)
             {
                 if (!tlv_end)
@@ -375,7 +380,7 @@ static unsigned char HELLO_decodePacket(struct ttdp_info *tinfo, uint8_t const *
                     printf("Malformed TTDP HELLO (missing END TLV)\n");
                     bad_frame = 0;
                 }
-                else if (mandatory_tlv_mask != 0x0f)
+                else if (mandatory_tlv_mask != 0x0) /*0x0f*/
                 {
                     printf("Missing mandatory TTDP HELLO TLV / Packet Discarded\n");
                 }
@@ -462,7 +467,7 @@ int CaptureInterface(char *ifname)
             printf("Pacchetto con tag: 0x%x\n", TagVlan);
             printf("Protocol: 0x%x\n", htons(eth_hdr->eth_type));
 
-            HELLO_decodePacket(NULL, packet + sizeof(eth_hdr), nn);
+            HELLO_decodePacket(NULL, packet + sizeof(eth_hdr), 380);
         }
 
         printf("----------------------------------------------------------\n\n");
