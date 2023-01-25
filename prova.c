@@ -126,9 +126,7 @@ struct lldp_info
 
 struct ttdp_info
 {
-
 };
-
 
 /* Funzione che seleziona l-interfaccia da cui catturare i pacchetti */
 int GetIf(char *ifname)
@@ -315,13 +313,13 @@ static unsigned char HELLO_decodePacket(struct ttdp_info *tinfo, uint8_t const *
 
     hdr = (struct eth_hdr *)packet;
 
-    printf("%2x %2x %2x %2x %2x %2x %2x %2x %2x %2x\n", *packet, *(packet+1), *(packet+2), *(packet+3), *(packet+4), *(packet+5), *(packet+6), *(packet+7), *(packet+8), *(packet+9), *(packet+10));
+    // printf("%2x %2x %2x %2x %2x %2x %2x %2x %2x %2x\n", *packet, *(packet + 1), *(packet + 2), *(packet + 3), *(packet + 4), *(packet + 5), *(packet + 6), *(packet + 7), *(packet + 8), *(packet + 9), *(packet + 10));
 
-    // printf("Valore iniziale di tlv_end: %d\n", tlv_end);
+    printf("Valore iniziale di tlv_end: %d\n", tlv_end);
 
-    while ((size > 0) && !tlv_end)
+    while ((size > 0) /*&& !tlv_end*/)
     {
-        // printf("Sono qua dentro\n");
+        printf("Sono qua dentro\n");
 
         p_packet += DecodeTLV(p_packet, (uint *)&size, &tlv);
         if (tlv)
@@ -359,17 +357,17 @@ static unsigned char HELLO_decodePacket(struct ttdp_info *tinfo, uint8_t const *
             }
             */
 
-           if(tlv->type == END_OF_LLDPDU_TLV)
-           {
-            tlv_end = 0;
-           }
+            printf("Valore di tlv_end %d\n", tlv_end);
+
+            if (tlv->type == END_OF_LLDPDU_TLV)
+            {
+                tlv_end = 0;
+            }
 
             if (bad_frame)
             {
                 printf("Malformed TTDP HELLO packet\n");
             }
-
-            // printf("Valore di tlv_end: %d\n", tlv_end);
 
             printf("Grandezza di size %d\n", size);
 
@@ -473,7 +471,6 @@ int CaptureInterface(char *ifname)
         printf("----------------------------------------------------------\n\n");
     }
 }
-
 
 /**
  * Main program for execution
