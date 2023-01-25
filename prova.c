@@ -28,8 +28,8 @@
 #include <linux/if_vlan.h>
 #include <netinet/if_ether.h>
 
-#define TRUE = 0
-#define FALSE = 1
+#define TRUE = 1
+#define FALSE = 0
 
 #ifdef TP_STATUS_VLAN_VALID
 #define VLAN_VALID(hdr, hv) ((hv)->tp_vlan_tci != 0 || ((hdr)->tp_status & TP_STATUS_VLAN_VALID))
@@ -304,8 +304,8 @@ static unsigned char HELLO_decodePacket(struct ttdp_info *tinfo, uint8_t const *
 
     uint8_t const *p_packet = packet;
     struct eth_hdr *hdr;
-    unsigned char tlv_end = 1;
-    unsigned char bad_frame = 1;
+    unsigned char tlv_end = 0;
+    unsigned char bad_frame = 0;
 
     struct lldp_tlv *tlv = NULL;
     uint tlv_num = 0;
@@ -315,27 +315,26 @@ static unsigned char HELLO_decodePacket(struct ttdp_info *tinfo, uint8_t const *
 
     // printf("%2x %2x %2x %2x %2x %2x %2x %2x %2x %2x\n", *packet, *(packet + 1), *(packet + 2), *(packet + 3), *(packet + 4), *(packet + 5), *(packet + 6), *(packet + 7), *(packet + 8), *(packet + 9), *(packet + 10));
 
-    printf("Valore iniziale di tlv_end: %d\n", tlv_end);
+    // printf("Valore iniziale di tlv_end: %d\n", tlv_end);
 
-    while ((size > 0) /*&& !tlv_end*/)
+    while ((size > 0) && !tlv_end && !bad_frame)
     {
-        printf("Sono qua dentro\n");
-
         p_packet += DecodeTLV(p_packet, (uint *)&size, &tlv);
+
         if (tlv)
         {
             tlv_num++;
-            printf("val di tlv_num %d\n", tlv_num);
+            // printf("Valore di tlv_num %d\n", tlv_num);
 
-            // printf("Valore di tlv_num: %d\n", tlv_num);
+            printf("Valore di bad_frame %d\n", bad_frame);
 
             if ((tlv_num < 4) && (tlv_num != tlv->type))
             {
-                bad_frame = 0;
+                bad_frame = 1;
             }
             else if ((tlv_num > 3) && ((tlv->type == 1) || (tlv->type == 2) || (tlv->type == 3)))
             {
-                bad_frame = 0;
+                bad_frame = 1;
             }
 
             if (tlv->type < 4)
@@ -347,50 +346,51 @@ static unsigned char HELLO_decodePacket(struct ttdp_info *tinfo, uint8_t const *
             printf("Information contains in tlv->length: %d\n", tlv->length);
 
             /*
-            if (!HELLO_decodeTLV(tlv))
+            if(!HELLO_decodeTLV(tlv))
             {
-                bad_frame = 0;
+                bad_frame = 1;
             }
-            else if (tlv->type == END_OF_LLDPDU_TLV)
+            else if(tlv->type == END_OF_LLDPDU_TLV)
             {
-                tlv_end = 0;
+                tlv_end = 1;
             }
             */
 
-            printf("Valore di tlv_end %d\n", tlv_end);
-
             if (tlv->type == END_OF_LLDPDU_TLV)
             {
-                tlv_end = 0;
+                tlv_end = 1;
             }
+        }
+        else
+        {
+            bad_frame = 1;
+        }
 
-            if (bad_frame)
-            {
-                printf("Malformed TTDP HELLO packet\n");
-            }
-
-            printf("Grandezza di size %d\n", size);
-
-            if (!bad_frame)
-            {
-                if (!tlv_end)
-                {
-                    printf("Malformed TTDP HELLO (missing END TLV)\n");
-                    bad_frame = 0;
-                }
-                else if (mandatory_tlv_mask != 0x0) /*0x0f*/
-                {
-                    printf("Missing mandatory TTDP HELLO TLV / Packet Discarded\n");
-                }
-                else if (size > 0)
-                {
-                    printf("Extra bytes after END TLV in TTDP HELLO packet\n");
-                }
-            }
-
-            return !bad_frame;
+        if (bad_frame)
+        {
+            printf("Malformed TTDP HELLO packet\n");
         }
     }
+
+    if (!bad_frame)
+    {
+        if (!tlv_end)
+        {
+            printf("Malformed TTDP HELLO (missing END TLV)\n");
+            bad_frame = 1;
+        }
+        else if (mandatory_tlv_mask != 0x0f) // check that all amdatory TLV's has been recived
+        {
+            printf("Missing mandatory TTDP HELLO TLV / Packet Discarded\n");
+            bad_frame = 1;
+        }
+        else if (size > 0)
+        {
+            printf("Extra bytes after END TLV in TTDP HELLO packet\n");
+        }
+    }
+
+    return !bad_frame;
 }
 
 /* Funzione principale */
