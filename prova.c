@@ -263,7 +263,7 @@ uint DecodeTLV(uint8_t const *data, uint *size, struct lldp_tlv **tlv)
         if (*size >= length + 2)
         {
             // Allocate the decoded TLV
-            tlv = calloc(tlv_header, length); // >> 9;
+            *tlv = calloc(tlv_header, length); // >> 9;
             (*tlv)->type = type;
             (*tlv)->length = length;
 
@@ -283,6 +283,8 @@ uint DecodeTLV(uint8_t const *data, uint *size, struct lldp_tlv **tlv)
             printf("Malformed TLV(type %u): length is 2 + %u but available size is %u\n", type, length, *size);
         }
     }
+
+    printf("decoded bytes %d\n", decoded_bytes);
 
     return decoded_bytes;
 }
@@ -314,22 +316,18 @@ static unsigned char HELLO_decodePacket(struct ttdp_info *tinfo, uint8_t const *
 
     hdr = (struct eth_hdr *)packet;
 
-    // printf("%2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x\n", *packet, *(packet + 1), *(packet + 2), *(packet + 3), *(packet + 4), *(packet + 5), *(packet + 6), *(packet + 7), *(packet + 8), *(packet + 9), *(packet + 10), *(packet + 11), *(packet + 12), *(packet + 13), *(packet + 14), *(packet + 15), *(packet + 16), *(packet + 17), *(packet + 18), *(packet + 19), *(packet + 20));
-
-    // printf("Valore iniziale di tlv_end: %d\n", tlv_end);
+    printf("%2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x\n\n", *packet, *(packet + 1), *(packet + 2), *(packet + 3), *(packet + 4), *(packet + 5), *(packet + 6), *(packet + 7), *(packet + 8), *(packet + 9), *(packet + 10), *(packet + 11), *(packet + 12), *(packet + 13), *(packet + 14), *(packet + 15), *(packet + 16), *(packet + 17), *(packet + 18), *(packet + 19), *(packet + 20));
 
     while ((size > 0) && !tlv_end && !bad_frame)
     {
+        tlv = NULL;
         p_packet += DecodeTLV(p_packet, (uint *)&size, &tlv);
 
         if (tlv)
         {
             tlv_num++;
-            // printf("Valore di tlv_num %d\n", tlv_num);
+            printf("Valore di tlv_num %d\n", tlv_num);
 
-            printf("sono dentro if \n");
-
-            printf("Valore di bad_frame %d\n", bad_frame);
 
             if ((tlv_num < 4) && (tlv_num != tlv->type))
             {
@@ -346,7 +344,7 @@ static unsigned char HELLO_decodePacket(struct ttdp_info *tinfo, uint8_t const *
             }
 
             printf("Information contains in tlv->type: %d\n", tlv->type);
-            printf("Information contains in tlv->length: %d\n", tlv->length);
+            printf("Information contains in tlv->length: %d\n\n", tlv->length);
 
             /*
             if(!HELLO_decodeTLV(tlv))
