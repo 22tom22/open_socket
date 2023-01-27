@@ -258,13 +258,12 @@ uint DecodeTLV(uint8_t const *data, uint *size, struct lldp_tlv **tlv)
 
         memcpy(&tlv_header, data, sizeof(tlv_header));
         type = ntohs(tlv_header) >> 9;
-        // printf("            type: %d\n", type);
         length = ntohs(tlv_header) & 0x01FF;
 
         if (*size >= length + 2)
         {
             // Allocate the decoded TLV
-            *tlv = calloc(tlv_header, length); // >> 9;
+            tlv = calloc(tlv_header, length); // >> 9;
             (*tlv)->type = type;
             (*tlv)->length = length;
 
@@ -302,6 +301,8 @@ static unsigned char HELLO_decodePacket(struct ttdp_info *tinfo, uint8_t const *
 {
     static char const lldpaddr[] = LLDP_MULTICAST_ADDR;
 
+    packet = packet + 6;
+
     uint8_t const *p_packet = packet;
     struct eth_hdr *hdr;
     unsigned char tlv_end = 0;
@@ -313,7 +314,7 @@ static unsigned char HELLO_decodePacket(struct ttdp_info *tinfo, uint8_t const *
 
     hdr = (struct eth_hdr *)packet;
 
-    // printf("%2x %2x %2x %2x %2x %2x %2x %2x %2x %2x\n", *packet, *(packet + 1), *(packet + 2), *(packet + 3), *(packet + 4), *(packet + 5), *(packet + 6), *(packet + 7), *(packet + 8), *(packet + 9), *(packet + 10));
+    // printf("%2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x\n", *packet, *(packet + 1), *(packet + 2), *(packet + 3), *(packet + 4), *(packet + 5), *(packet + 6), *(packet + 7), *(packet + 8), *(packet + 9), *(packet + 10), *(packet + 11), *(packet + 12), *(packet + 13), *(packet + 14), *(packet + 15), *(packet + 16), *(packet + 17), *(packet + 18), *(packet + 19), *(packet + 20));
 
     // printf("Valore iniziale di tlv_end: %d\n", tlv_end);
 
@@ -325,6 +326,8 @@ static unsigned char HELLO_decodePacket(struct ttdp_info *tinfo, uint8_t const *
         {
             tlv_num++;
             // printf("Valore di tlv_num %d\n", tlv_num);
+
+            printf("sono dentro if \n");
 
             printf("Valore di bad_frame %d\n", bad_frame);
 
@@ -379,7 +382,7 @@ static unsigned char HELLO_decodePacket(struct ttdp_info *tinfo, uint8_t const *
             printf("Malformed TTDP HELLO (missing END TLV)\n");
             bad_frame = 1;
         }
-        else if (mandatory_tlv_mask != 0x0f) // check that all amdatory TLV's has been recived
+        else if (mandatory_tlv_mask != 0x0f) // check that all mandatory TLV's has been recived
         {
             printf("Missing mandatory TTDP HELLO TLV / Packet Discarded\n");
             bad_frame = 1;
