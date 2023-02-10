@@ -376,6 +376,8 @@ uint DecodeTLV(uint8_t const *data, uint *size, struct lldp_tlv **tlv)
  * Fills the TTDP information
  *
  * @param tlv Points to the tlv structure tp be decoded
+ * @param neighbour Points to the TTDP neighbour descriptor
+ * @param rx_port Points to the interface descriptor
  * @return 1 if the TLV was correctly decoded or 0 in case of error
  */
 static unsigned char HELLO_decodeTLV(struct lldp_tlv const *tlv, ETB_neighbour *neighbour, TTDPPort *rx_port)
@@ -426,7 +428,7 @@ static unsigned char HELLO_decodeTLV(struct lldp_tlv const *tlv, ETB_neighbour *
 
     case ORG_SPECIFIC_TLV:
     {
-        HELLO_TLV *h = (HELLO_TLV *) tlv->info; 
+        HELLO_TLV *h = (HELLO_TLV *) tlv->info;
 
         if (!memcmp(h->oui_id, TTDP_OUI, 3) && (h->oui_subtype == TTDP_HELLO_TLV))
         {
@@ -613,6 +615,7 @@ int CaptureInterface(char *ifname)
     struct pkt_info p;
     int one = 1;
     int TagVlan;
+    TTDPPort porta;
 
     struct iovec iov;
     struct cmsghdr *cmsg_ptr;
@@ -672,7 +675,7 @@ int CaptureInterface(char *ifname)
             printf("Pacchetto con tag: 0x%x\n", TagVlan);
             printf("Protocol: 0x%x\n", htons(eth_hdr->eth_type));
 
-            HELLO_decodePacket(NULL, *ifname, packet + sizeof(eth_hdr), 380);
+            HELLO_decodePacket(NULL, &porta, packet + sizeof(eth_hdr), 380);
         }
 
         printf("----------------------------------------------------------\n\n");
