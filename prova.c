@@ -28,6 +28,8 @@
 #include <linux/if_vlan.h>
 #include <netinet/if_ether.h>
 
+#include <uuid/uuid.h>
+
 #define TRUE = 1
 #define FALSE = 0
 
@@ -55,6 +57,20 @@
 #endif
 #define ETHERTYPE_TTCMP 0x895
 #define ETHERTYPE_8021Q 0x8100
+
+#define TIME_TO_LIVE_TLV 3
+#define ORG_SPECIFIC_TLV 127
+#define PORT_ID_AGENT_CIRCUIT_ID 6
+#define TTDP_OUI "\x20\x0E\x95"
+#define TTDP_HELLO_TLV 1 // TTDP HELLO specific TLV subtype
+#define TTDP_PORTS 4
+#define TTDP_HELLO_FAST 0x02
+
+#define mac_copy(a, b) memcpy(a, b, ETH_ALEN)
+#define mac_compare(a, b) memcmp(a, b, ETH_ALEN)
+// #define mac_is_set(m) (m && (mac_compare(m, zero_mac) != 0))
+
+typedef uint8_t MAC_ADDR[ETH_ALEN];
 
 #define LLDP_MULTICAST_ADDR                \
     {                                      \
@@ -124,6 +140,71 @@ struct lldp_info
     int *mgmt_addr;
 };
 
+// TTDP Specific HELLO TLV definition
+typedef struct HELLO_TLV
+{
+    uint8_t oui_id[3];
+    uint8_t oui_subtype;
+    uint16_t FCS;
+    uint32_t version;
+    uint32_t lifesign;
+    uint32_t TopoCounter;
+    uint8_t VendorInfo[32];
+    uint8_t lines_status;
+    uint8_t period;
+    uint8_t source_id[6];
+    uint8_t egress_line;
+    uint8_t egress_direction;
+    uint8_t InaugurationFlag;
+    uint8_t remote_id[6];
+    uint8_t cstUUID[16];
+} __attribute__((packed)) HELLO_TLV;
+
+// Direct neighbour descriptor. Data comes from TTDP HELLO packets recived from neighbours. Only one neighbour from each directions hould exist
+typedef struct ttdp_neighbour
+{
+    MAC_ADDR mac;
+    uint8_t *chassis_id;
+    uint8_t *port_id;
+    uint16_t ttl;
+    char *system_name;
+
+    char remote_lines[4];
+    uint8_t remote_dir[4];
+
+    char vendor_info[32];
+    uint8_t lines;
+    uint8_t inaug_flag;
+    uuid_t cstUUID;
+    MAC_ADDR source_id;
+    MAC_ADDR remote_id;
+
+    uint32_t etbTopoCnt;
+} ETB_neighbour;
+
+typedef struct ttdp_port
+{
+    char const *name;
+    uint const line_idx;
+
+    struct
+    {
+        uint8_t txFreq;
+        uint32_t txSeqNum;
+        uint32_t rxSeqNum;
+        unsigned char txImmediate;
+
+        uint32_t transitions;
+
+        struct
+        {
+            uint8_t txFreq;
+            uint32_t transitions;
+        } remote;
+    } hello;
+} TTDPPort;
+
+// This structure contains the information about this ETB. Some properties are statically defined while others comes from TTDP protocol frames
 struct ttdp_info
 {
 };
@@ -290,6 +371,138 @@ uint DecodeTLV(uint8_t const *data, uint *size, struct lldp_tlv **tlv)
 }
 
 /**
+ * @brief Decode a single TTDP HELLO packet TLV
+ *
+ * Fills the TTDP information
+ *
+ * @param tlv Points to the tlv structure tp be decoded
+ * @return 1 if the TLV was correctly decoded or 0 in case of error
+ */
+static unsigned char HELLO_decodeTLV(struct lldp_tlv const *tlv, ETB_neighbour *neighbour, TTDPPort *rx_port)
+{
+    unsigned char retval = 1;
+
+    switch (tlv->type)
+    {
+    case END_OF_LLDPDU_TLV:
+        break;
+
+    case CHASSIS_ID_TLV:
+        if (tlv->info[0] = CHASSIS_ID_MAC_ADDRESS)
+        {
+            if (!neighbour->chassis_id)
+            {
+                neighbour->chassis_id = (uint8_t *)calloc(1, tlv->length);
+                memcpy(neighbour->chassis_id, &tlv->info[1], tlv->length - 1);
+            }
+        }
+        break;
+
+    case PORT_ID_TLV:
+        if (tlv->info[0] == PORT_ID_AGENT_CIRCUIT_ID) // agent circuit-id subtype
+        {
+            if (!neighbour->port_id)
+            {
+                neighbour->port_id = (uint8_t *)calloc(1, tlv->length);
+                memcpy(neighbour->port_id, &tlv->info[1], tlv->length - 1);
+            }
+        }
+        break;
+
+    case TIME_TO_LIVE_TLV:
+    {
+        uint16_t *ttl = (uint16_t *)&tlv->info[0];
+        neighbour->ttl = ntohs(*ttl);
+    }
+    break;
+
+    case SYSTEM_NAME_TLV:
+        if (!neighbour->system_name)
+        {
+            neighbour->system_name = (char *)calloc(1, (tlv->length + 1));
+            memcpy(neighbour->system_name, tlv->info, tlv->length);
+        }
+        break;
+
+    case ORG_SPECIFIC_TLV:
+    {
+        HELLO_TLV *h = (HELLO_TLV *) tlv->info; 
+
+        if (!memcmp(h->oui_id, TTDP_OUI, 3) && (h->oui_subtype == TTDP_HELLO_TLV))
+        {
+            uint16_t fcs = 0;
+            uint32_t seq_num = ntohl(h->lifesign);
+
+            // check for sequence number missing
+            if (!rx_port->hello.rxSeqNum)
+            {
+                printf("%s: First TTDP HELLO packet (lifeSign recived %u)", rx_port->name, seq_num);
+            }
+            else if (rx_port->hello.rxSeqNum + 1u < seq_num)
+            {
+                printf("%s: Warning %u TTDP HELLO packets missed (lifeSign expected %u - recived %u)", rx_port->name, seq_num - (rx_port->hello.rxSeqNum + 1), rx_port->hello.rxSeqNum + 1, seq_num);
+            }
+
+            // save the sequence number of the recived frame
+            rx_port->hello.rxSeqNum = seq_num;
+
+            // get the Topology Counter
+            neighbour->etbTopoCnt = ntohl(h->TopoCounter);
+
+            // get vendor information
+            memcpy(neighbour->vendor_info, h->VendorInfo, 32);
+
+            // get remote lines status information
+            neighbour->lines = h->lines_status;
+
+            // check if neighour is asking for a fast HELLO
+            if ((h->period == TTDP_HELLO_FAST))
+            {
+                rx_port->hello.txImmediate = 1;
+
+                if (rx_port->hello.remote.txFreq != TTDP_HELLO_FAST)
+                {
+                    rx_port->hello.remote.transitions++;
+                }
+            }
+
+            rx_port->hello.remote.txFreq = h->period;
+
+            // associate remote line name and direction with the receiving port
+            neighbour->remote_lines[rx_port->line_idx] = h->egress_line;
+            neighbour->remote_dir[rx_port->line_idx] = h->egress_direction;
+
+            // get inauguration inhibition flag
+            neighbour->inaug_flag = h->InaugurationFlag;
+
+            // check if there is something wrong with the source-id: it should not change suddenly without having zeroed i advange by timeout
+            /*
+            if (mac_is_set(neighbour->source_id) && mac_compare(neighbour->source_id, h->source_id))
+            {
+                printf("Warning source-id announced by neighbour doffers from the previous one!");
+            }
+            */
+
+            // save source MAC address annouced by this neighbour
+            mac_copy(neighbour->source_id, h->remote_id);
+
+            // get the remote-ID
+            mac_copy(neighbour->remote_id, h->remote_id);
+
+            // get cstUUID
+            uuid_copy(neighbour->cstUUID, h->cstUUID);
+        }
+    }
+    break;
+
+    default:
+        retval = 0; // unkonown TLV
+    }
+
+    return retval;
+}
+
+/**
  * @brief handle the recepition of a TTDP HELLO packet
  *
  * This is a standard LLDP packet containing a specific TLV
@@ -299,16 +512,18 @@ uint DecodeTLV(uint8_t const *data, uint *size, struct lldp_tlv **tlv)
  * @param size Is the size of the recived packet
  * @return FALSE in case of any decoding error; TRUE otherwise
  */
-static unsigned char HELLO_decodePacket(struct ttdp_info *tinfo, uint8_t const *packet, int32_t size)
+static unsigned char HELLO_decodePacket(struct ttdp_info *tinfo, TTDPPort *rx_port, uint8_t const *packet, int32_t size)
 {
     static char const lldpaddr[] = LLDP_MULTICAST_ADDR;
 
-    packet = packet + 6;
+    // struct TTDPPort *rx_port = NULL;
 
+    packet = packet + 6;
     uint8_t const *p_packet = packet;
     struct eth_hdr *hdr;
     unsigned char tlv_end = 0;
     unsigned char bad_frame = 0;
+    ETB_neighbour *ttdp_neighbour = NULL;
 
     struct lldp_tlv *tlv = NULL;
     uint tlv_num = 0;
@@ -316,7 +531,7 @@ static unsigned char HELLO_decodePacket(struct ttdp_info *tinfo, uint8_t const *
 
     hdr = (struct eth_hdr *)packet;
 
-    printf("%2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x\n\n", *packet, *(packet + 1), *(packet + 2), *(packet + 3), *(packet + 4), *(packet + 5), *(packet + 6), *(packet + 7), *(packet + 8), *(packet + 9), *(packet + 10), *(packet + 11), *(packet + 12), *(packet + 13), *(packet + 14), *(packet + 15), *(packet + 16), *(packet + 17), *(packet + 18), *(packet + 19), *(packet + 20));
+    // printf("%2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x %2x\n\n", *packet, *(packet + 1), *(packet + 2), *(packet + 3), *(packet + 4), *(packet + 5), *(packet + 6), *(packet + 7), *(packet + 8), *(packet + 9), *(packet + 10), *(packet + 11), *(packet + 12), *(packet + 13), *(packet + 14), *(packet + 15), *(packet + 16), *(packet + 17), *(packet + 18), *(packet + 19), *(packet + 20));
 
     while ((size > 0) && !tlv_end && !bad_frame)
     {
@@ -326,8 +541,6 @@ static unsigned char HELLO_decodePacket(struct ttdp_info *tinfo, uint8_t const *
         if (tlv)
         {
             tlv_num++;
-            printf("Valore di tlv_num %d\n", tlv_num);
-
 
             if ((tlv_num < 4) && (tlv_num != tlv->type))
             {
@@ -343,21 +556,14 @@ static unsigned char HELLO_decodePacket(struct ttdp_info *tinfo, uint8_t const *
                 mandatory_tlv_mask |= (0x1 << tlv->type);
             }
 
-            printf("Information contains in tlv->type: %d\n", tlv->type);
+            printf("\nInformation contains in tlv->type: %d\n", tlv->type);
             printf("Information contains in tlv->length: %d\n\n", tlv->length);
 
-            /*
-            if(!HELLO_decodeTLV(tlv))
+            if (!HELLO_decodeTLV(tlv, ttdp_neighbour, rx_port))
             {
                 bad_frame = 1;
             }
-            else if(tlv->type == END_OF_LLDPDU_TLV)
-            {
-                tlv_end = 1;
-            }
-            */
-
-            if (tlv->type == END_OF_LLDPDU_TLV)
+            else if (tlv->type == END_OF_LLDPDU_TLV)
             {
                 tlv_end = 1;
             }
@@ -466,7 +672,7 @@ int CaptureInterface(char *ifname)
             printf("Pacchetto con tag: 0x%x\n", TagVlan);
             printf("Protocol: 0x%x\n", htons(eth_hdr->eth_type));
 
-            HELLO_decodePacket(NULL, packet + sizeof(eth_hdr), 380);
+            HELLO_decodePacket(NULL, *ifname, packet + sizeof(eth_hdr), 380);
         }
 
         printf("----------------------------------------------------------\n\n");
